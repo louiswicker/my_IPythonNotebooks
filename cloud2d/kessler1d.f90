@@ -23,8 +23,8 @@
 
 !------------------------------------------------------------------------------
 
-	real t00     ;    parameter( t00    = 300.0     )
-	real p00     ;    parameter( p00    = 1.0e5     )
+ real t00     ;    parameter( t00    = 300.0     )
+ real p00     ;    parameter( p00    = 1.0e5     )
  real rgas    ;    parameter( rgas   = 287.04    )
  real rv      ;    parameter( rv     = 461.00    )
  real cp      ;    parameter( cp     = 1004.     )
