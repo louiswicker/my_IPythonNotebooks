@@ -31,7 +31,7 @@ if options.compiler == None:
 else:
     compiler = options.compiler
 
-libopts = "/usr/lib/libSystem.dylib" 
+libopts = "-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib"
 
 # go through all the folders, make the python module and run the program
 #   f2py_module_list = []
@@ -44,7 +44,7 @@ for item in fortran_files:
     print("\n=====================================================\n")
     print("  Attempting to compile file: %s " % item)
     print("\n=====================================================")
-    ret = os.system("f2py3 -c --fcompiler='gnu95' --f90flags='%s' -m %s %s -DF2PY_REPORT_ON_ARRAY_COPY=1" % (libopts,prefix,item))
+    ret = os.system("f2py -c --fcompiler='gnu95' %s -m %s %s -DF2PY_REPORT_ON_ARRAY_COPY=1" % (libopts,prefix,item))
     if ret == 0:
         print("\n=====================================================\n")
         print("   Successfully compiled file: %s " % item)

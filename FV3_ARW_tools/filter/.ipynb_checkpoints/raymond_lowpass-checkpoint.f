@@ -404,6 +404,19 @@ C
         F(N-2) = 0.
         F(N-1) = 0.
         F(N)   = 0.
+        
+        print 102, "RHS: ", maxval(BB), minval(BB)
+C       print 101, 0, Z
+C       print 101, 1, A
+C       print 101, 2, B
+C       print 101, 3, C
+C       print 101, 4, D
+C       print 101, 5, E
+C       print 101, 6, F
+        
+101     format(1x, i3, f4.1)
+102     format(1x, a10, f4.1)
+          
 C
 C Step One
 C
@@ -457,73 +470,8 @@ C
      +            - PI(I)*XANS(I+3)
         ENDDO
 
+        print 102, "XRES: ", maxval(XANS), minval(XANS)
+
         RETURN
         END
         
-C---------------------------------------------------------------
-C
-C
-        SUBROUTINE RAYMOND_6(BB,N,XANS,EP)
-C
-C       GAUSSIAN ELIMINATION FOR LOW-PASS FILTER.
-C
-C       SIXTH-ORDER LOW-PASS IMPLICIT TANGENT FILTER.
-C       (REF: WILLIAM H RAYMOND, MWR, 116, 2132-2124)
-C
-        IMPLICIT NONE
-        INTEGER I,N
-
-C
-        REAL*8  A(N),B(N),C(N),D(N),E(N)
-        REAL*8  DELTA(N),BETA(N),W(N),GAM(N)
-        REAL*8  H(N),XANS(N),BB(N),PI(N)
-        REAL*8  AP(N),F(N),Z(N)
-
-        REAL*8 EP
-C
-C---------------------------------------------------------------
-C       INITIALIZE THE MATRIX
-
-
-        subroutine gauss_1(a,b,x,n)
-        !============================================================
-        ! Solutions to a system of linear equations A*x=b
-        ! Method: the basic elimination (simple Gauss elimination)
-        ! Alex G. November 2009
-        !-----------------------------------------------------------
-        ! input ...
-        ! a(n,n) - array of coefficients for matrix A
-        ! b(n) - vector of the right hand coefficients b
-        ! n - number of equations
-        ! output ...
-        ! x(n) - solutions
-        ! comments ...
-        ! the original arrays a(n,n) and b(n) will be destroyed
-        ! during the calculation
-        !===========================================================
-        implicit none
-        integer n
-        double precision a(n,n), b(n), x(n)
-        double precision c
-        integer i, j, k
-        !step 1: forward elimination
-        do k=1, n-1
-        do i=k+1,n
-        c=a(i,k)/a(k,k)
-        a(i,k) = 0.0
-        b(i)=b(i)- c*b(k)
-        do j=k+1,n
-        a(i,j) = a(i,j)-c*a(k,j)
-        end do
-        end do
-        end do
-        !step 2: back substitution
-        x(n) = b(n)/a(n,n)
-        do i=n-1,1,-1
-        c=0.0
-        do j=i+1,n
-        c= c + a(i,j)*x(j)
-        end do
-        x(i) = (b(i)- c)/a(i,i)
-        end do
-        end subroutine gauss_1
