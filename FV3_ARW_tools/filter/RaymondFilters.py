@@ -194,9 +194,10 @@ def RaymondFilter6(xy2d, eps, **kwargs):
         print(f"I-loop {toc - tic:0.4f} seconds")
     
         tic = time.perf_counter()
+        XYRES2 = XYRES.copy()
         A = Filter6_Init(nx, eps)
         for j in np.arange(ny):
-            XYRES[j,:] = Filter1D(xy2d[j,:], eps, A, **kwargs)
+            XYRES[j,:] = Filter1D(XYRES2[j,:], eps, A, **kwargs)
         
         toc = time.perf_counter()
         print(f"J-loop {toc - tic:0.4f} seconds")
@@ -407,9 +408,10 @@ def RaymondFilter10(xy2d, eps, **kwargs):
         print(f"I-loop {toc - tic:0.4f} seconds")
     
         tic = time.perf_counter()
+        XYRES2 = XYRES.copy()
         A = Filter10_Init(nx, eps)
         for j in np.arange(ny):
-            XYRES[j,:] = Filter1D(xy2d[j,:], eps, A, **kwargs)
+            XYRES[j,:] = Filter1D(XYRES2[j,:], eps, A, **kwargs)
         
         toc = time.perf_counter()
         print(f"J-loop {toc - tic:0.4f} seconds")
