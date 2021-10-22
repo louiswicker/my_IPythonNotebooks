@@ -197,12 +197,8 @@ C Local variables
 
         INTEGER :: I, J, NM
         REAL*8, ALLOCATABLE :: XY(:), RESULT(:)
-C       REAL :: XY(513), RESULT(513)
 
         NM = MAX(NX, NY)
-
-        print *, 'NX: ', nx
-        print *, 'NY: ', ny
 
         ALLOCATE(XY(NM))
         ALLOCATE(RESULT(NM))

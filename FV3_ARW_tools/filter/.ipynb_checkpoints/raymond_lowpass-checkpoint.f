@@ -197,12 +197,8 @@ C Local variables
 
         INTEGER :: I, J, NM
         REAL*8, ALLOCATABLE :: XY(:), RESULT(:)
-C       REAL :: XY(513), RESULT(513)
 
         NM = MAX(NX, NY)
-
-        print *, 'NX: ', nx
-        print *, 'NY: ', ny
 
         ALLOCATE(XY(NM))
         ALLOCATE(RESULT(NM))
@@ -405,18 +401,6 @@ C
         F(N-1) = 0.
         F(N)   = 0.
         
-        print 102, "RHS: ", maxval(BB), minval(BB)
-C       print 101, 0, Z
-C       print 101, 1, A
-C       print 101, 2, B
-C       print 101, 3, C
-C       print 101, 4, D
-C       print 101, 5, E
-C       print 101, 6, F
-        
-101     format(1x, i3, f4.1)
-102     format(1x, a10, f4.1)
-          
 C
 C Step One
 C
@@ -469,8 +453,6 @@ C
           XANS(I) = H(I)-BETA(I)*XANS(I+1)-GAM(I)*XANS(I+2)
      +            - PI(I)*XANS(I+3)
         ENDDO
-
-        print 102, "XRES: ", maxval(XANS), minval(XANS)
 
         RETURN
         END
