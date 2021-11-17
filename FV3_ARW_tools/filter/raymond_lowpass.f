@@ -189,9 +189,9 @@ C---------------------------------------------------------------
 C Passed variables
 
         INTEGER, INTENT(IN)  :: NX, NY
-        REAL*8,    INTENT(IN)  :: XY2D(NX,NY)
-        REAL*8,    INTENT(OUT) :: RESULT2D(NX,NY)
-        REAL*8,    INTENT(IN)  :: EPS
+        REAL*8,  INTENT(IN)  :: XY2D(NX,NY)
+        REAL*8,  INTENT(OUT) :: RESULT2D(NX,NY)
+        REAL*8,  INTENT(IN)  :: EPS
 
 C Local variables
 
@@ -266,10 +266,10 @@ C
 
 C Passed variables
 
-        INTEGER, INTENT(IN) :: N
-        REAL*8, INTENT(IN)  :: XY(N)
-        REAL*8, INTENT(OUT) :: RESULT(N)
-        REAL*8, INTENT(IN)  :: EPS
+        INTEGER, INTENT(IN)  :: N
+        REAL*8,  INTENT(IN)  :: XY(N)
+        REAL*8,  INTENT(OUT) :: RESULT(N)
+        REAL*8,  INTENT(IN)  :: EPS
 
 C Local Variables
 

@@ -107,70 +107,65 @@ def RaymondFilter6(xy2d, eps, **kwargs):
         L1[:] =  15.0*EM
         L2[:] =   6.0*EP
         L3[:] =       EM
-        
-        # Set diagonals near boundary
-        
-        U3[0:3] = ( 0.0,     0.0,     0.0 )
-        U2[0:3] = ( 0.0,     0.0,      EP )
-        U1[0:3] = ( 0.0,      EM,  4.0*EM )
 
-        D [0:3] = ( 1.0,  2.0*EP,  6.0*EP )
-
-        L1[0:3] = ( 0.0,      EM,  4.0*EM )
-        L2[0:3] = ( 0.0,     0.0,      EP )
-        L3[0:3] = ( 0.0,     0.0,     0.0 )
-
-        U3[NM3:N] = (    0.0,    0.0,     0.0 )
-        U2[NM3:N] = (     EP,    0.0,     0.0 )
-        U1[NM3:N] = ( 4.0*EM,     EM,     0.0 )
-
-        D [NM3:N] = ( 6.0*EP, 2.0*EP,     1.0 )
-
-        L1[NM3:N] = ( 4.0*EM,     EM,     0.0 )
-        L2[NM3:N] = (     EP,    0.0,     0.0 )
-        L3[NM3:N] = (    0.0,    0.0,     0.0 )
-
-#         # Set boundary values
-        
-#         if bc_reflect:
+        if bc_reflect: # use reflective condition at boundary
             
-#             U3[0:3] = (  2.0*EM,       EM,       EM)
-#             U2[0:3] = ( 12.0*EP,   6.0*EP,   6.0*EP)
-#             U1[0:3] = ( 30.0*EM,  16.0*EM,  15.0*EM)
+            U3[0:3] = (  2.0*EM,       EM,       EM)
+            U2[0:3] = ( 12.0*EP,   6.0*EP,   6.0*EP)
+            U1[0:3] = ( 30.0*EM,  16.0*EM,  15.0*EM)
               
-#             D [0:3] = ( 20.0*EP,  26.0*EP,  20.0*EP)  
+            D [0:3] = ( 20.0*EP,  26.0*EP,  20.0*EP)  
             
-#             L1[0:3] = (  0.0,     15.0*EM,  16.0*EM)        
-#             L2[0:3] = (  0.0,      0.0,      6.0*EP)
-#             L3[0:3] = (  0.0,      0.0,        0.0 )
+            L1[0:3] = (  0.0,     15.0*EM,  16.0*EM)        
+            L2[0:3] = (  0.0,      0.0,      6.0*EP)
+            L3[0:3] = (  0.0,      0.0,        0.0 )
 
 
-#             U3[NM3:N] = (  0.0,      0.0,        0.0 )
-#             U2[NM3:N] = (  6.0*EP,   0.0,        0.0 )            
-#             U1[NM3:N] = ( 16.0*EM,  15.0*EM,     0.0 )
+            U3[NM3:N] = (  0.0,      0.0,        0.0 )
+            U2[NM3:N] = (  6.0*EP,   0.0,        0.0 )            
+            U1[NM3:N] = ( 16.0*EM,  15.0*EM,     0.0 )
             
-#             D [NM3:N] = ( 20.0*EP,  26.0*EP,  20.0*EP)  
+            D [NM3:N] = ( 20.0*EP,  26.0*EP,  20.0*EP)  
             
-#             L1[NM3:N] = ( 15.0*EM,  16.0*EM,  30.0*EM)
-#             L2[NM3:N] = (  6.0*EP,   6.0*EP,  12.0*EP)
-#             L3[NM3:N] = (      EM,       EM,   2.0*EM)
+            L1[NM3:N] = ( 15.0*EM,  16.0*EM,  30.0*EM)
+            L2[NM3:N] = (  6.0*EP,   6.0*EP,  12.0*EP)
+            L3[NM3:N] = (      EM,       EM,   2.0*EM)
             
-#             # Convert diagonals to sparse matrix format (the tricky part as far as I am concerned!)
+            # Convert diagonals to sparse matrix format (the tricky part as far as I am concerned!)
         
-#             diagonals = [D, L1, U1, L2, U2, L3, U3]
+            diagonals = [D, L1, U1, L2, U2, L3, U3]
         
-#             return spdiags(diagonals, [0, -1, 1, -2, 2, -3, 3], N, N, format='csc')
+            return spdiags(diagonals, [0, -1, 1, -2, 2, -3, 3], N, N, format='csc')
 
-#         else:  # reduce order of approximation at boundary assuming Dirichet at i=0
-            
-
-        # Convert diagonals to sparse matrix format (the tricky part as far as I am concerned!)
+        else:  # reduce order of approximation at boundary assuming Dirichet at i=0
         
-        diagonals = [D[1:-1], L1[1:-1], U1[1:-1], L2[1:-1], U2[1:-1], L3[1:-1], U3[1:-1]]
+            U3[0:3] = ( 0.0,     0.0,     0.0 )
+            U2[0:3] = ( 0.0,     0.0,      EP )
+            U1[0:3] = ( 0.0,      EM,  4.0*EM )
+
+            D [0:3] = ( 1.0,  2.0*EP,  6.0*EP )
+
+            L1[0:3] = ( 0.0,      EM,  4.0*EM )
+            L2[0:3] = ( 0.0,     0.0,      EP )
+            L3[0:3] = ( 0.0,     0.0,     0.0 )
+
+            U3[NM3:N] = (    0.0,    0.0,     0.0 )
+            U2[NM3:N] = (     EP,    0.0,     0.0 )
+            U1[NM3:N] = ( 4.0*EM,     EM,     0.0 )
+
+            D [NM3:N] = ( 6.0*EP, 2.0*EP,     1.0 )
+
+            L1[NM3:N] = ( 4.0*EM,     EM,     0.0 )
+            L2[NM3:N] = (     EP,    0.0,     0.0 )
+            L3[NM3:N] = (    0.0,    0.0,     0.0 )
+        
+            # Convert diagonals to sparse matrix format (the tricky part as far as I am concerned!)
+        
+            diagonals = [D[1:-1], L1[1:-1], U1[1:-1], L2[1:-1], U2[1:-1], L3[1:-1], U3[1:-1]]
  
-        # The use of Dirichet BCs means that the first and last values of solution == 0.  Rewrite system to be N-2.
+            # The use of Dirichet BCs means that the first and last values of solution == 0.  Rewrite system to be N-2.
 
-        return spdiags(diagonals, [0, -1, 1, -2, 2, -3, 3], N-2, N-2, format='csc')
+            return spdiags(diagonals, [0, -1, 1, -2, 2, -3, 3], N-2, N-2, format='csc')
     
     #---------------------------------------------------------------------------------------------
     def Filter1D(XY, EPS, A, bc_reflect=False, **kwargs):
@@ -203,23 +198,43 @@ def RaymondFilter6(xy2d, eps, **kwargs):
         NM4 = N-4
         NM5 = N-5
         NM6 = N-6
-                   
-        RHS[  0] = 0.0
-        RHS[  1] =  EPS*( XY[0] - 2.0*XY[1] +     XY[2] ) 
-        RHS[  2] = -EPS*( XY[0] - 4.0*XY[1] + 6.0*XY[2] - 4.0*XY[3] + XY[4] )
+
+        # Compute inner RHS
         
-        RHS[3:NM3] = EPS*(       (XY[0:NM3-3]+XY[6:NM3+3])
-                           - 6.0*(XY[1:NM3-2]+XY[5:NM3+2])
-                           +15.0*(XY[2:NM3-1]+XY[4:NM3+1])
-                           -20.0* XY[3:NM3]               )
+        RHS[3:NM3] = EPS*((XY[0:NM3-3]+XY[6:NM3+3])
+                    - 6.0*(XY[1:NM3-2]+XY[5:NM3+2])
+                    +15.0*(XY[2:NM3-1]+XY[4:NM3+1])
+                    -20.0* XY[3:NM3]               )
 
-        RHS[NM3] = -EPS*( XY[NM1] - 4.0*XY[NM2] + 6.0*XY[NM3] - 4.0*XY[NM4] + XY[NM5] )
-        RHS[NM2] =  EPS*( XY[NM1] - 2.0*XY[NM2] +     XY[NM3] )   
-        RHS[NM1] = 0.0 
+        if bc_reflect: 
 
-        XF[1:-1] = XF[1:-1] + spsolve(A, RHS[1:-1])
+            RHS[  0] =  EPS*(-20.0*XY[0] + 30.0*XY[1] - 12.0*XY[2] +  2.0*XY[3])
+            RHS[  1] =  EPS*( 15.0*XY[0] - 26.0*XY[1] + 16.0*XY[2] -  6.0*XY[3] +     XY[4]) 
+            RHS[  2] =  EPS*( -6.0*XY[0] + 16.0*XY[1] - 20.0*XY[2] + 15.0*XY[3] - 6.0*XY[4] + XY[5])
+        
 
-        return XF
+            RHS[NM3] = EPS*( -6.0*XY[NM1] + 16.0*XY[NM2] - 20.0*XY[NM3] + 15.0*XY[NM4] - 6.0*XY[NM5] + XY[NM6])
+            RHS[NM2] = EPS*( 15.0*XY[NM1] - 26.0*XY[NM2] + 16.0*XY[NM3] -  6.0*XY[NM4] +     XY[NM5])   
+            RHS[NM1] = EPS*(-20.0*XY[NM1] + 30.0*XY[NM2] - 12.0*XY[NM3] +  2.0*XY[NM4])
+       
+            XF = XF + spsolve(A, RHS)
+
+            return XF
+
+        else:
+            
+            RHS[  0] = 0.0
+            RHS[  1] =  EPS*( XY[0] - 2.0*XY[1] +     XY[2] ) 
+            RHS[  2] = -EPS*( XY[0] - 4.0*XY[1] + 6.0*XY[2] - 4.0*XY[3] + XY[4] )
+        
+
+            RHS[NM3] = -EPS*( XY[NM1] - 4.0*XY[NM2] + 6.0*XY[NM3] - 4.0*XY[NM4] + XY[NM5] )
+            RHS[NM2] =  EPS*( XY[NM1] - 2.0*XY[NM2] +     XY[NM3] )   
+            RHS[NM1] = 0.0 
+
+            XF[1:-1] = XF[1:-1] + spsolve(A, RHS[1:-1])
+
+            return XF
 
     #---------------------------------------------------------------------------------------------
     # Code to do 1D or 2D input
