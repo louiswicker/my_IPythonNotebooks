@@ -6,7 +6,6 @@ import xarray as xr
 import glob as glob
 import os as os
 import sys as sys
-from wrf import getvar, interplevel
 
 _Rgas       = 287.04
 _gravity    = 9.806
@@ -60,19 +59,20 @@ def fv3_extract_variables_over_region(file, sw_corner=None, ne_corner=None, writ
     v        = ds_conus[v[0]].values
     cref     = ds_conus[cref[0]].values
     
-    ds_final = xr.Dataset(coords={"lats": (["ny","nx"], ds_conus['lats']),
-                                  "lons": (["ny","nx"], ds_conus['lons']),  # important!
+    
+    ds_final = xr.Dataset(coords={"lats": (["ny","nx"], ds_conus['lats'].data),
+                                  "lons": (["ny","nx"], ds_conus['lons'].data),  # important!
                                   "pres": (["nz"],      plevels)  } )
                        
-    ds_final["lats"]    = (["ny", "nx"],  ds_conus.lats )
-    ds_final["lons"]    = (["ny", "nx"],  ds_conus.lons )
+    ds_final["lats"]    = (["ny", "nx"],  ds_conus['lats'].data )
+    ds_final["lons"]    = (["ny", "nx"],  ds_conus['lons'].data )
     ds_final["HGT"]     = (["nz", "ny", "nx"],  hgt[...])
     ds_final["W"]       = (["nz", "ny", "nx"],    w[...])
     ds_final["TEMP"]    = (["nz", "ny", "nx"], temp[...])
     ds_final["U"]       = (["nz", "ny", "nx"],    u[...])
     ds_final["V"]       = (["nz", "ny", "nx"],    v[...])
-    ds_final["CREF"]    = (["ny", "nx"],         uh[...])
-    ds_final["UH"]      = (["ny", "nx"],       cref[...])
+    ds_final["CREF"]    = (["ny", "nx"],       cref[...])
+    ds_final["UH"]      = (["ny", "nx"],        uh [...])
     ds_final["plevels"] = (["nz"], plevels)
      
     # extract region
