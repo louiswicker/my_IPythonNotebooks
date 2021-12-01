@@ -52,32 +52,7 @@ def fv3_extract_variables_over_region(file, sw_corner=None, ne_corner=None, writ
     ds_conus = ds_conus.rename_dims({'xgrid_0':'nx', 'ygrid_0': 'ny', 'lv_ISBL0': 'nz'})
     ds_conus = ds_conus.rename_vars({'lv_ISBL0':'levels', 'gridlat_0': 'lats', 'gridlon_0': 'lons'})    
     ds_conus = ds_conus.sortby('nz', ascending=False)
-
-    w        = ds_conus[w[0]].values
-    uh       = ds_conus[uh[0]].values
-    hgt      = ds_conus[height[0]].values
-    sfc_hgt  = ds_conus[sfc_height[0]].values
-    temp     = ds_conus[temperature[0]].values
-    u        = ds_conus[u[0]].values
-    v        = ds_conus[v[0]].values
-    cref     = ds_conus[cref[0]].values
-      
-    ds_final = xr.Dataset(coords={"lats": (["ny","nx"], ds_conus['lats'].data),
-                                  "lons": (["ny","nx"], ds_conus['lons'].data),  # important!
-                                  "pres": (["nz"],      plevels)  } )
-                       
-    ds_final["lats"]    = (["ny", "nx"],  ds_conus['lats'].data )
-    ds_final["lons"]    = (["ny", "nx"],  ds_conus['lons'].data )
-    ds_final["SFC_HGT"] = (["ny", "nx"],  sfc_hgt[...])
-    ds_final["HGT"]     = (["nz", "ny", "nx"],  hgt[...])
-    ds_final["W"]       = (["nz", "ny", "nx"],    w[...])
-    ds_final["TEMP"]    = (["nz", "ny", "nx"], temp[...])
-    ds_final["U"]       = (["nz", "ny", "nx"],    u[...])
-    ds_final["V"]       = (["nz", "ny", "nx"],    v[...])
-    ds_final["CREF"]    = (["ny", "nx"],       cref[...])
-    ds_final["UH"]      = (["ny", "nx"],        uh [...])
-    ds_final["plevels"] = (["nz"], plevels)
-     
+    
     # extract region
     
     if (sw_corner and len(sw_corner) > 1) and (ne_corner and len(ne_corner) > 1):
@@ -87,11 +62,27 @@ def fv3_extract_variables_over_region(file, sw_corner=None, ne_corner=None, writ
         lon_max = max(sw_corner[1], ne_corner[1])
         print(f'Creating a sub-region of DataArray: {lat_min:.2f}, {lon_min:.2f}, {lat_max:.2f}, {lon_max:5.2f}','\n')
 
-        ds_final = ds_final.where( (lat_min < ds_final.lats)      & (ds_final.lats < lat_max)
-                                 & (lon_min+360. < ds_final.lons) & (ds_final.lons < lon_max+360.), drop=True)
+        ds_conus = ds_conus.where( (lat_min      < ds_conus.lats) & (ds_conus.lats < lat_max)
+                                 & (lon_min+360. < ds_conus.lons) & (ds_conus.lons < lon_max+360.), drop=True)
         
-    print(f'Successfully created interpolated fields from file:  {file}','\n')
-        
+    # I could just drop all the extra data sets out, but its probably faster for me to simply recreate a new separate one.
+      
+    ds_final = xr.Dataset(coords={"lats": (["ny","nx"], ds_conus['lats'].data),
+                                  "lons": (["ny","nx"], ds_conus['lons'].data),  # important!
+                                  "pres": (["nz"],      plevels)  } )
+                       
+    ds_final["lats"]    = (["ny", "nx"],        ds_conus['lats'].data )
+    ds_final["lons"]    = (["ny", "nx"],        ds_conus['lons'].data )
+    ds_final["SFC_HGT"] = (["ny", "nx"],        ds_conus[sfc_height[0]].data)
+    ds_final["HGT"]     = (["nz", "ny", "nx"],  ds_conus[height[0]].data)
+    ds_final["W"]       = (["nz", "ny", "nx"],  ds_conus[w[0]].values)
+    ds_final["TEMP"]    = (["nz", "ny", "nx"],  ds_conus[temperature[0]].data)
+    ds_final["U"]       = (["nz", "ny", "nx"],  ds_conus[u[0]].data)
+    ds_final["V"]       = (["nz", "ny", "nx"],  ds_conus[v[0]].data)
+    ds_final["CREF"]    = (["ny", "nx"],        ds_conus[cref[0]].data)
+    ds_final["UH"]      = (["ny", "nx"],        ds_conus[uh[0]].data)
+    ds_final["plevels"] = (["nz"], plevels)
+             
     if writeout:
         dir, base = os.path.split(file)
         if ((sw_corner and len(sw_corner) > 1) and (ne_corner and len(ne_corner) > 1)):
@@ -127,31 +118,13 @@ def wrf_extract_variables_over_region(file, sw_corner=None, ne_corner=None, writ
     print(f'WRF_Extract: Extracting variables over region from input file: {file}','\n')
     
     ds_conus = xr.open_dataset(file)
-    
-# Convert omega --> w
 
-    density  =  ds_conus.__getitem__(pressure[0]) / (_Rgas * ds_conus.__getitem__(temperature[0])) 
-    w_array  = -ds_conus.__getitem__(omega[0])    / (density*_gravity)
-            
-    ds_conus = xr.Dataset({
-                       pressure[1]: xr.DataArray(data   = ds_conus.__getitem__(pressure[0])),   
-                    temperature[1]: xr.DataArray(data   = ds_conus.__getitem__(temperature[0])),
-                             uh[1]: xr.DataArray(data   = ds_conus.__getitem__(uh[0])[0]),      
-                         height[1]: xr.DataArray(data   = ds_conus.__getitem__(height[0])),
-                     sfc_height[1]: xr.DataArray(data   = ds_conus.__getitem__(sfc_height[0])),
-                              u[1]: xr.DataArray(data   = ds_conus.__getitem__(u[0])),
-                              v[1]: xr.DataArray(data   = ds_conus.__getitem__(v[0])),
-                           cref[1]: xr.DataArray(data   = ds_conus.__getitem__(cref[0])),
-                           'W_HYB': xr.DataArray(data   = w_array) })        
-
-# Change some variable names for convienence
+    # Change some variable names for convienence
 
     ds_conus = ds_conus.rename_dims({'xgrid_0':'nx', 'ygrid_0': 'ny', 'lv_HYBL0': 'nz'})
-    ds_conus = ds_conus.rename_vars({'lv_HYBL0':'levels', 'gridlat_0': 'lats', 'gridlon_0': 'lons'})
-    
-    print(ds_conus.lats)
-    
-# extract region
+    ds_conus = ds_conus.rename_vars({'lv_HYBL0':'levels', 'gridlat_0': 'lats', 'gridlon_0': 'lons'}) 
+
+    # extract region drop the halo...
 
     if (sw_corner and len(sw_corner) > 1) and (ne_corner and len(ne_corner) > 1):
         lat_min = min(sw_corner[0], ne_corner[0])
@@ -161,21 +134,23 @@ def wrf_extract_variables_over_region(file, sw_corner=None, ne_corner=None, writ
         
         print(f'Creating a sub-region of DataArray: {lat_min:.2f}, {lon_min:.2f}, {lat_max:.2f}, {lon_max:5.2f}','\n')
 
-        ds_conus = ds_conus.where( (lat_min < ds_conus.lats)      & (ds_conus.lats < lat_max)
-                                 & (lon_min+360. < ds_conus.lons) & (ds_conus.lons < lon_max+360.), drop=True)
-        
-        print(ds_conus.lats)
+        ds_conus = ds_conus.where( (lat_min < ds_conus.lats) & (ds_conus.lats < lat_max)
+                                 & (lon_min < ds_conus.lons) & (ds_conus.lons < lon_max), drop=True)
+    
+# Convert omega --> w
 
+    w_hyb    = -ds_conus[omega[0]].data / ( (_gravity * ds_conus[pressure[0]].data) / (_Rgas * ds_conus[temperature[0]].data) )
+    
+# These variables will be interpolated to the plevels from 3D hybrid pressures in HRRR model
+
+    p        = ds_conus[pressure[0]].values
+    hgt_hyb  = ds_conus[height[0]].values
+    temp_hyb = ds_conus[temperature[0]].values
+    u_hyb    = ds_conus[u[0]].values
+    v_hyb    = ds_conus[v[0]].values
+            
 # These variables will be interpolated to the plevels from 3D hybrid pressures
 
-    p        = ds_conus[pressure[1]].values
-    w_hyb    = ds_conus['W_HYB'].values
-    hgt_hyb  = ds_conus[height[1]].values
-    temp_hyb = ds_conus[temperature[1]].values
-    u_hyb    = ds_conus[u[1]].values
-    v_hyb    = ds_conus[v[1]].values
-    sfc_hgt  = ds_conus[sfc_height[1]].values
-    
     w        = np.zeros((len(plevels),len(ds_conus.ny),len(ds_conus.nx)),dtype=np.float32)
     hgt      = np.zeros((len(plevels),len(ds_conus.ny),len(ds_conus.nx)),dtype=np.float32)
     temp     = np.zeros((len(plevels),len(ds_conus.ny),len(ds_conus.nx)),dtype=np.float32)
@@ -192,23 +167,22 @@ def wrf_extract_variables_over_region(file, sw_corner=None, ne_corner=None, writ
             temp[::-1,j,i] = interp1d_np(temp_hyb[::-1,j,i], p[::-1,j,i], plevels[::-1])
             u[::-1,j,i]    = interp1d_np(u_hyb[::-1,j,i], p[::-1,j,i], plevels[::-1])
             v[::-1,j,i]    = interp1d_np(v_hyb[::-1,j,i], p[::-1,j,i], plevels[::-1])
-        
+
     ds_final = xr.Dataset(coords={"lats": (["ny","nx"], ds_conus['lats'].data),
                                   "lons": (["ny","nx"], ds_conus['lons'].data),
                                   "pres": (["nz"],      plevels)  } )
                        
     ds_final["W"]       = (["nz", "ny", "nx"],    w[...])
     ds_final["HGT"]     = (["nz", "ny", "nx"],  hgt[...])
-    ds_final["SFC_HGT"] = (["ny", "nx"],    sfc_hgt[...])
-    ds_final["W"]       = (["nz", "ny", "nx"],    w[...])
     ds_final["TEMP"]    = (["nz", "ny", "nx"], temp[...])
     ds_final["U"]       = (["nz", "ny", "nx"],    u[...])
     ds_final["V"]       = (["nz", "ny", "nx"],    v[...])
-    ds_final["CREF"]    = (["ny", "nx"],       ds_conus[cref[1]].values)
-    ds_final["UH"]      = (["ny", "nx"],       ds_conus[uh[1]].values)
+    ds_final["CREF"]    = (["ny", "nx"],       ds_conus[cref[0]].data)
+    ds_final["UH"]      = (["ny", "nx"],       ds_conus[uh[0]].data[0])
+    ds_final["SFC_HGT"] = (["ny", "nx"],       ds_conus[sfc_height[0]].data)
     ds_final["plevels"] = (["nz"], plevels)
     
-    print(f'Successfully created interpolated fields from file:  {file}','\n')
+    print(f'Successfully interpolated fields from file:  {file}','\n')
         
     if writeout:
         dir, base = os.path.split(file)
