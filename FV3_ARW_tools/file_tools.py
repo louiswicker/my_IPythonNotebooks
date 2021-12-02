@@ -6,6 +6,7 @@ import xarray as xr
 import glob as glob
 import os as os
 import sys as sys
+import pygrib
 
 _Rgas       = 287.04
 _gravity    = 9.806
@@ -25,6 +26,152 @@ nz_new = plevels.shape[0]
 def interp1d_np(data, z, zi):
 #     print(f"data: {data.shape} | z: {z.shape} | zi: {zi.shape}")
     return np.interp(zi, z, data)
+
+#--------------------------------------------------------------------------------------------------
+# Special thanks to Scott Ellis of DOE for sharing codes for reading grib2
+
+def grbFile_attr(grb_file):
+
+    dataloc = np.array(grb_file[1].latlons())
+
+    return dataloc[0], dataloc[1]
+
+def grbVar_to_slice(grb_obj):
+
+    """Takes a single grb object for a variable returns a 2D plane"""
+
+    return {'data' : grb_obj[0].values, 'units' : grb_obj[0]['units'],
+            'date' : grb_obj[0].date, 'fcstStart' : grb_obj[0].time, 'fcstTime' : grb_obj[0].step}
+
+def grbVar_to_cube(grb_obj, type='isobaricInhPa'):
+
+    """Takes a single grb object for a variable containing multiple
+    levels. Can sort on type. Compiles to a cube"""
+
+    all_levels = np.array([grb_element['level'] for grb_element in grb_obj])
+    types      = np.array([grb_element['typeOfLevel'] for grb_element in grb_obj])
+
+    if type != None:
+        levels = []
+        for n, its_type in enumerate(types):
+            if type == types[n]:
+                levels.append(all_levels[n])
+        levels = np.asarray(levels)
+    else:
+        levels = all_levels
+
+    n_levels   = len(levels)
+    indexes    = np.argsort(levels)[::-1] # highest pressure first
+    cube       = np.zeros([n_levels, grb_obj[0].values.shape[0], grb_obj[1].values.shape[1]])
+
+    for k in range(n_levels):
+        cube[k,:,:] = grb_obj[indexes[k]].values
+
+    return {'data' : cube, 'units' : grb_obj[0]['units'], 'levels' : levels[indexes],
+            'date' : grb_obj[0].date, 'fcstStart' : grb_obj[0].time, 'fcstTime' : grb_obj[0].step}
+
+#--------------------------------------------------------------------------------------------------
+
+def fv3_grib_read_variable(file, sw_corner=None, ne_corner=None, var_list=[''], writeout=True, prefix=None):
+    
+    # Special thanks to Scott Ellis of DOE for sharing codes for reading grib2
+    
+    default = {               #grib name               #dimensions
+               'TEMP':     ['Temperature',                 3],
+               'SFC_HGT':  ['Orography',                   2],
+               'HGT':      ['Geopotential Height',         3],              
+               'W':        ['Geometric vertical velocity', 3],
+               'U':        ['U component of wind',         3],
+               'V':        ['V component of wind',         3],
+               'UH':       ['Updraft Helicity',            2],
+               'CREF':     ['Derived radar reflectivity',  3],
+               }
+
+    if var_list != ['']:
+        variables = {k: default[k] for k in default.keys() & set(var_list)}  # yea, I stole this....
+    else:
+        variables = default
+
+    print(f'-'*120,'\n')
+    print(f'FV3_Extract: Extracting variables from grib file: {file}','\n')
+
+    # open file
+
+    grb_file = pygrib.open(file)
+
+    # Get lat lons
+
+    lats, lons = grbFile_attr(grb_file)
+
+    pres = [None]
+
+    for n, key in enumerate(variables):
+
+        print('Reading my variable: ',key, 'from GRIB variable: ',variables[key][0])
+
+        grb_var = grb_file.select(name=variables[key][0])
+        
+        if variables[key][1] == 3:
+
+            if key == 'CREF':  # this is a painful hack because of grib weirdness
+                cube = grbVar_to_cube(grb_var, type=None)
+                new = xr.DataArray( cube['data'].max(axis=0), dims=['ny','nx'], 
+                                    coords={"lats": (["ny","nx"], lats),
+                                            "lons": (["ny","nx"], lons) } )
+            else:
+                cube = grbVar_to_cube(grb_var, type='isobaricInhPa')
+                pres = cube['levels']
+
+                new = xr.DataArray( cube['data'],dims=['nz','ny','nx'], 
+                                                 coords={"lats": (["ny","nx"], lats),
+                                                         "lons": (["ny","nx"], lons), 
+                                                         "pres": (["nz"],      pres) } )
+        if variables[key][1] == 2:
+            cube = grbVar_to_slice(grb_var)
+            new = xr.DataArray( cube['data'], dims=['ny','nx'], 
+                                              coords={"lats": (["ny","nx"], lats),
+                                                     "lons": (["ny","nx"], lons) } )
+        if n == 0:
+
+            ds_conus = new.to_dataset(name = key)
+
+        else:         
+
+            ds_conus[key] = new
+
+        del(new)
+        
+    # add lats, lons, and pres as variables
+    
+    ds_conus["lats"]    = (["ny", "nx"], lats )
+    ds_conus["lons"]    = (["ny", "nx"], lons )
+    if pres[0] != None:
+        ds_conus["plevels"] = (["nz"], pres)
+
+    # clean up grib file
+    
+    grb_file.close()
+    
+    # extract region
+    
+    if (sw_corner and len(sw_corner) > 1) and (ne_corner and len(ne_corner) > 1):
+        lat_min = min(sw_corner[0], ne_corner[0])
+        lat_max = max(sw_corner[0], ne_corner[0])
+        lon_min = min(sw_corner[1], ne_corner[1])
+        lon_max = max(sw_corner[1], ne_corner[1])
+        print(f'Creating a sub-region of conus grid: {lat_min:.2f}, {lon_min:.2f}, {lat_max:.2f}, {lon_max:5.2f}','\n')
+
+        ds_conus = ds_conus.where( (lat_min      < ds_conus.lats) & (ds_conus.lats < lat_max)
+                                 & (lon_min+360. < ds_conus.lons) & (ds_conus.lons < lon_max+360.), drop=True)            
+    if writeout:
+        dir, base = os.path.split(file)
+        if prefix == None:  
+            outfilename = os.path.join(dir, 'conus_%s.nc' % (base[-3:]))
+            ds_conus.to_netcdf(outfilename, mode='w')  
+            print(f'Successfully wrote new data to file:: {outfilename}','\n')
+            return ds_conus, outfilename
+    else:
+        return ds_conus, outfilename
 
 #--------------------------------------------------------------------------------------------------
 
