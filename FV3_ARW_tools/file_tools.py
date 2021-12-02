@@ -34,13 +34,13 @@ def grbFile_attr(grb_file):
 
     dataloc = np.array(grb_file[1].latlons())
 
-    return dataloc[0], dataloc[1]
+    return np.float32(dataloc[0]), np.float32(dataloc[1])
 
 def grbVar_to_slice(grb_obj):
 
     """Takes a single grb object for a variable returns a 2D plane"""
 
-    return {'data' : grb_obj[0].values, 'units' : grb_obj[0]['units'],
+    return {'data' : np.float32(grb_obj[0].values), 'units' : grb_obj[0]['units'],
             'date' : grb_obj[0].date, 'fcstStart' : grb_obj[0].time, 'fcstTime' : grb_obj[0].step}
 
 def grbVar_to_cube(grb_obj, type='isobaricInhPa'):
@@ -67,7 +67,7 @@ def grbVar_to_cube(grb_obj, type='isobaricInhPa'):
     for k in range(n_levels):
         cube[k,:,:] = grb_obj[indexes[k]].values
 
-    return {'data' : cube, 'units' : grb_obj[0]['units'], 'levels' : levels[indexes],
+    return {'data' : np.float32(cube), 'units' : grb_obj[0]['units'], 'levels' : levels[indexes],
             'date' : grb_obj[0].date, 'fcstStart' : grb_obj[0].time, 'fcstTime' : grb_obj[0].step}
 
 #--------------------------------------------------------------------------------------------------
@@ -121,32 +121,31 @@ def fv3_grib_read_variable(file, sw_corner=None, ne_corner=None, var_list=[''], 
             else:
                 cube = grbVar_to_cube(grb_var, type='isobaricInhPa')
                 pres = cube['levels']
+               
+                new = xr.DataArray( cube['data'], dims=['nz','ny','nx'], coords={'pres': (['nz'], pres),
+                                                                                 "lons": (["ny","nx"], lons),
+                                                                                 "lats": (["ny","nx"], lats)} )
 
-                new = xr.DataArray( cube['data'],dims=['nz','ny','nx'], 
-                                                 coords={"lats": (["ny","nx"], lats),
-                                                         "lons": (["ny","nx"], lons), 
-                                                         "pres": (["nz"],      pres) } )
+                
         if variables[key][1] == 2:
             cube = grbVar_to_slice(grb_var)
-            new = xr.DataArray( cube['data'], dims=['ny','nx'], 
-                                              coords={"lats": (["ny","nx"], lats),
-                                                     "lons": (["ny","nx"], lons) } )
+            new = xr.DataArray( cube['data'], dims=['ny','nx'], coords={"lons": (["ny","nx"], lons),
+                                                                        "lats": (["ny","nx"], lats)} )
         if n == 0:
-
             ds_conus = new.to_dataset(name = key)
-
-        else:         
-
+        else:
             ds_conus[key] = new
-
+            
         del(new)
         
-    # add lats, lons, and pres as variables
-    
-    ds_conus["lats"]    = (["ny", "nx"], lats )
-    ds_conus["lons"]    = (["ny", "nx"], lons )
-    if pres[0] != None:
-        ds_conus["plevels"] = (["nz"], pres)
+#         if n == 0:
+
+#             ds_conus = new.to_dataset(name = key)
+#             # ds_conus = xr.Dataset(coords={"lats": (["ny","nx"], ds_conus['lats'].data),
+#             #                       "lons": (["ny","nx"], ds_conus['lons'].data), 
+#             #                       "pres": (["nz"],      plevels)  } 
+
+#         else:         
 
     # clean up grib file
     
@@ -161,8 +160,8 @@ def fv3_grib_read_variable(file, sw_corner=None, ne_corner=None, var_list=[''], 
         lon_max = max(sw_corner[1], ne_corner[1])
         print(f'Creating a sub-region of conus grid: {lat_min:.2f}, {lon_min:.2f}, {lat_max:.2f}, {lon_max:5.2f}','\n')
 
-        ds_conus = ds_conus.where( (lat_min      < ds_conus.lats) & (ds_conus.lats < lat_max)
-                                 & (lon_min+360. < ds_conus.lons) & (ds_conus.lons < lon_max+360.), drop=True)            
+        ds_conus = ds_conus.where( (lat_min < ds_conus.lats) & (ds_conus.lats < lat_max)
+                                 & (lon_min < ds_conus.lons) & (ds_conus.lons < lon_max), drop=True)            
     if writeout:
         dir, base = os.path.split(file)
         if prefix == None:  
