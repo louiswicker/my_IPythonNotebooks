@@ -29,7 +29,7 @@ class Timer:
 
 #---------------------------------------------------------------------------------------------
             
-def RaymondFilter6(xy2d, eps, **kwargs):
+def RaymondFilter6(xy2d, eps, npass = 1, **kwargs):
     """
     Driver for Raymond's filters for 1 and 2D arrays
     
@@ -238,10 +238,13 @@ def RaymondFilter6(xy2d, eps, **kwargs):
 
     #---------------------------------------------------------------------------------------------
     # Code to do 1D or 2D input
-    
+
     if len(xy2d.shape) < 2:
         A = Filter6_Init(xy2d.shape[0], eps, **kwargs)
-        return Filter1D(xy2d[:], eps, A, **kwargs)
+        x_copy = xy2d[:].copy()
+        for n in np.arange(npass):
+            x_copy = Filter1D(x_copy.copy(), eps, A, **kwargs)
+        return x_copy
     
     elif len(xy2d.shape) > 2:
         print("RaymondFilter6:  3D filtering not implemented as of yet, exiting\n")
@@ -251,33 +254,112 @@ def RaymondFilter6(xy2d, eps, **kwargs):
     
         ny, nx = xy2d.shape
         
-        print("RaymondFilter6 called:  Shape of array:  NY: %d  NX:  %d" % (ny, nx))
+        print("RaymondFilter6 (Python version) called:  Shape of array:  NY: %d  NX:  %d, NPASS:  %d\n" % (ny, nx, npass))
+        
+        x1d = np.zeros((nx,))
+        y1d = np.zeros((ny,))
+        
+        ytmp    = xy2d.copy()
+        xy_copy = xy2d.copy()
+
+        tic = time.perf_counter()
+
+        for n in np.arange(npass):  # multiple pass capability
+            
+            tic = time.perf_counter()
+            
+            A = Filter6_Init(ny, eps, **kwargs)
+            
+            for i in np.arange(nx):
+                y1d[:]    = xy_copy[:,i]
+                ytmp[:,i] = Filter1D(y1d, eps, A, **kwargs)
+        
+            A = Filter6_Init(nx, eps, **kwargs)
+            
+            xtmp = ytmp.copy()
+            
+            for j in np.arange(ny):
+                xy_copy[j,:] = Filter1D(xtmp[j,:], eps, A, **kwargs)
+        
+            toc = time.perf_counter()
+            
+            print(f"J-loop {tic - toc:0.4f} seconds")
+        
+        return xy_copy
+
+#---------------------------------------------------------------------------------------------
+            
+def RaymondFilter6F(xy2d, eps, npass=1, **kwargs):
+    """
+    Driver for Raymond's filters for 1 and 2D arrays
+    
+    Adapted from Raymond's original code 
+    
+    Wraps Raymond's 6th order fortran code in python using f2py
+    
+    See RAYMOND, 1988, MWR, 116, 2132-2141 for details on parameter EPS
+    
+    Lou Wicker, Oct 2021 
+    """
+    
+    try:
+        from filter.raymond_lowpass import raymond1d_lowpass 
+    except ImportError: 
+        raise ImportError("RaymondFilter6F:  Requires compiled shared library called raymond_lowpass.")
+            #---------------------------------------------------------------------------------------------
+    # Code to do 1D or 2D input
+
+    if len(xy2d.shape) < 2:
+        
+        toc = time.perf_counter()
+
+        x_copy = xy2d[:].copy()
+        for n in np.arange(npass):
+            x_copy = raymond1d_lowpass(x_copy.copy(), eps)
+            
+        tic = time.perf_counter()
+            
+        print(f"NPass Loop took {tic - toc:0.4f} seconds\n")
+
+        return x_copy
+    
+    elif len(xy2d.shape) > 2:
+        
+        print("RaymondFilter6F:  3D filtering not implemented as of yet, exiting\n")
+        sys.exit(-1)
+        
+    else:
+    
+        ny, nx = xy2d.shape
+        
+        print("RaymondFilter6F called:  Shape of array:  NY: %d  NX:  %d, NPASS:  %d" % (ny, nx, npass))
 
         x1d = np.zeros((nx,))
         y1d = np.zeros((ny,))
         
-        XYRES = xy2d.copy()
+        ytmp    = xy2d.copy()
+        xy_copy = xy2d.copy()
 
-        tic = time.perf_counter()
-        
-        A = Filter6_Init(ny, eps, **kwargs)
-        for i in np.arange(nx):
-            y1d[:]     = xy2d[:,i]
-            XYRES[:,i] = Filter1D(y1d, eps, A, **kwargs)
-        
         toc = time.perf_counter()
-        print(f"I-loop {toc - tic:0.4f} seconds")
-    
+
+        for n in np.arange(npass):  # multiple pass capability
+                                    
+            for i in np.arange(nx):
+                y1d[:]    = xy_copy[:,i]
+                ytmp[:,i] = raymond1d_lowpass(y1d, eps)
+        
+            A = Filter6_Init(nx, eps, **kwargs)
+            
+            xtmp = ytmp.copy()
+            
+            for j in np.arange(ny):
+                xy_copy[j,:] = raymond1d_lowpass(xtmp[j,:], eps)
+        
         tic = time.perf_counter()
-        XYRES2 = XYRES.copy()
-        A = Filter6_Init(nx, eps, **kwargs)
-        for j in np.arange(ny):
-            XYRES[j,:] = Filter1D(XYRES2[j,:], eps, A, **kwargs)
+            
+        print(f"NPass Loop took {tic - toc:0.4f} seconds\n")
         
-        toc = time.perf_counter()
-        print(f"J-loop {toc - tic:0.4f} seconds")
-        
-        return XYRES
+        return xy_copy
 
 #---------------------------------------------------------------------------------------------
     
@@ -551,60 +633,3 @@ def RaymondFilter10(xy2d, eps, **kwargs):
         return XYRES
 
 #---------------------------------------------------------------------------------------------
-            
-def RaymondFilter6F(xy2d, eps, **kwargs):
-    """
-    Driver for Raymond's filters for 1 and 2D arrays
-    
-    Adapted from Raymond's original code 
-    
-    Wraps Raymond's 6th order fortran code in python using f2py
-    
-    See RAYMOND, 1988, MWR, 116, 2132-2141 for details on parameter EPS
-    
-    Lou Wicker, Oct 2021 
-    """
-    
-    try:
-        from filter.raymond_lowpass import raymond1d_lowpass 
-    except ImportError: 
-        raise ImportError("RaymondFilter6F:  Requires compiled shared library called raymond_lowpass.")
-            #---------------------------------------------------------------------------------------------
-    # Code to do 1D or 2D input
-
-    if len(xy2d.shape) < 2:
-        return raymond1d_lowpass(xy2d[:], eps)
-    
-    elif len(xy2d.shape) > 2:
-        print("RaymondFilter6F:  3D filtering not implemented as of yet, exiting\n")
-        sys.exit(-1)
-        
-    else:
-
-        ny, nx = xy2d.shape
-        
-        print("RaymondFilter6F called:  Shape of array:  NY: %d  NX:  %d" % (ny, nx))
-
-        x1d = np.zeros((nx,))
-        y1d = np.zeros((ny,))
-        
-        XYRES = xy2d.copy()
-
-        tic = time.perf_counter()
-        
-        for i in np.arange(nx):
-            y1d[:]     = xy2d[:,i]
-            XYRES[:,i] = raymond1d_lowpass(y1d, eps)
-        
-        toc = time.perf_counter()
-        print(f"I-loop {toc - tic:0.4f} seconds")
-    
-        tic = time.perf_counter()
-        XYRES2 = XYRES.copy()
-        for j in np.arange(ny):
-            XYRES[j,:] = raymond1d_lowpass(XYRES2[j,:], eps)
-        
-        toc = time.perf_counter()
-        print(f"J-loop {toc - tic:0.4f} seconds")
-        
-        return XYRES
