@@ -7,9 +7,19 @@ import glob as glob
 import os as os
 import sys as sys
 import pygrib
-import scipy.signal
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 
+import warnings
+warnings.filterwarnings("ignore")
 
+# def fxn():
+#     warnings.warn("deprecated", DeprecationWarning)
+
+# with warnings.catch_warnings():
+#     warnings.simplefilter("ignore")
+#     fxn()
+    
 _nthreads = 2
 
 _Rgas       = 287.04
@@ -25,62 +35,6 @@ plevels = np.asarray([100000.,  97500.,  95000.,  92500.,  90000.,  87500.,  850
                         2000.,   1000.,    700.,    500.,    200.])
 
 nz_new = plevels.shape[0]
-
-#--------------------------------------------------------------------------------------------------
-# Interp from 3D pressure to 1D pressure (convert from hybrid to constant p-levels)
-
-def interp3d_np(data, p3d, p1d, nthreads = _nthreads):
-    
-    dinterp = np.zeros((len(p1d),data.shape[1],data.shape[2]),dtype=np.float32)
-
-    if nthreads < 0:  # turning this off for now.
-        def worker(i):
-            print("running %d %s" % (i, data.shape))
-            for j in np.arange(data.shape[1]):
-                  dinterp[:,j,i] = np.interp(p1d[::-1], p3d[:,j,i], data[:,j,i])
-
-        pool = mp.Pool(nthreads)
-        for i in np.arange(data.shape[2]):
-            pool.apply_async(worker, args = (i, ))
-        pool.close()
-        pool.join()
-        
-        return dinterp[::-1,:,:]
-    
-    else:        
-        for i in np.arange(data.shape[2]):
-            for j in np.arange(data.shape[1]):
-                dinterp[:,j,i] = np.interp(p1d[::-1], p3d[:,j,i], data[:,j,i])
-        
-        return dinterp[::-1,:,:]
-    
-#--------------------------------------------------------------------------------------------------
-# Plotting strings for filtered field labels
-    
-def title_string(time, pres, label, wmax, wmin, eps=None):
-    if eps:
-        return ("%2.2i UTC %s at Pres=%3.0f mb with EPS=%5.1f \n Wmax: %3.1f        Wmin: %4.2f" % (time, label, pres/100., eps, wmax, wmin))
-    else:
-        return ("%2.2i UTC %s at Pres=%3.0f mb \n Wmax: %3.1f        Wmin: %4.2f" % (time, label, pres/100., wmax, wmin))
-
-#--------------------------------------------------------------------------------------------------
-# Choose a section of the grid based on lat/lon corners - excludes the rest of grid from xarray
-
-def extract_subregion(xr_obj, sw_corner=None, ne_corner=None, drop=True):
-    
-    if (sw_corner and len(sw_corner) > 1) and (ne_corner and len(ne_corner) > 1):
-        lat_min = min(sw_corner[0], ne_corner[0])
-        lat_max = max(sw_corner[0], ne_corner[0])
-        lon_min = min(sw_corner[1], ne_corner[1])
-        lon_max = max(sw_corner[1], ne_corner[1])
-        
-        print(f'Creating a sub-region of grid: {lat_min:.2f}, {lon_min:.2f}, {lat_max:.2f}, {lon_max:5.2f}','\n')
-
-        return xr_obj.where( (lat_min < xr_obj.lats) & (xr_obj.lats < lat_max)
-                           & (lon_min < xr_obj.lons) & (xr_obj.lons < lon_max), drop=drop)
-    else:
-        print(f"No grid information supplied - returning original grid!\n")
-        return xr_obj
 
 #--------------------------------------------------------------------------------------------------
 # Special thanks to Scott Ellis of DOE for sharing codes for reading grib2
@@ -126,6 +80,172 @@ def grbVar_to_cube(grb_obj, type='isobaricInhPa'):
             'date' : grb_obj[0].date, 'fcstStart' : grb_obj[0].time, 'fcstTime' : grb_obj[0].step}
 
 #--------------------------------------------------------------------------------------------------
+# Plotting strings for filtered field labels
+    
+def title_string(file, level, label, wmax, wmin, eps=None):
+    if eps:
+        return ("%s at level=%2.2i with EPS=%5.1f \n %s-max: %3.1f       %s-min: %4.2f" % (file, level, label, eps, label, wmax, label, wmin))
+    else:
+        return ("%s at level=%2.2i \n %s-Max: %3.1f     %s-Min: %4.2f" % (file, level, label, wmax, label, wmin))
+
+#--------------------------------------------------------------------------------------------------
+# Quick W plot to figure out where stuff is
+
+def quickplotgrib(file, klevel= 20, cmap = 'turbo', ax=None, filetype='hrrr', \
+                                   newlat=[25,50], 
+                                   newlon=[-130,-65]):
+    """
+        Meant to be a quick look at a horizontal field from a grib file, using W.
+        Defaults should be good enough, but its possible for some cases to have to changed these
+        to look at the whole grid.
+        
+        Input:
+        ------
+        
+        file:  name of grib file
+        
+        Options:
+        --------
+        
+        klevel:    the horizontal level to plot.  Values of 20-30 should capture updraft
+        cmap:      whatever you like, use a diverging colormap.  Values are automatically scaled.
+        ax:        dont mess with this, unless your ax setup is done right (like below)
+        filetype:  either HRRR or RRFS grib, the VV variable is hard coded to pick up what you need.
+        newlat:    tuple of two lats for zoom, or to test the values for a region grid. Set to "None" to see whole grid.
+        newlon:    tuple of two lons for zoom, or to test the values for a region grid. Set to "None" to see whole grid.
+        
+        LJW December 2021
+    """
+    
+    # open file
+
+    grb_file = pygrib.open(file)
+
+    # Get lat lons
+
+    lats, lons = grbFile_attr(grb_file)
+    
+    if filetype == 'hrrr':
+        grb_var = grb_file.select(name='Vertical velocity')
+        cube = grbVar_to_cube(grb_var, type='hybrid')['data']
+    else:
+        grb_var = grb_file.select(name='Geometric vertical velocity')
+        cube = grbVar_to_cube(grb_var)['data']
+        
+    glat_min = lats.min()
+    glat_max = lats.max()
+    glon_min = lons.min()
+    glon_max = lons.max()
+
+    print(f'\nGrib File Lat Min: %4.1f  Lat Max:  %4.1f' % (glat_min, glat_max))
+    print(f'\nGrib File Lon Min: %4.1f  Lon Max:  %4.1f' % (glon_min, glon_max))
+    
+    print(f'\nGrib File W Min: %4.1f  W Max:  %4.1f\n' %(-cube[klevel].max(), cube[klevel].min()))
+    
+    if ax == None:
+        
+        proj = ccrs.LambertConformal(central_latitude = 30, 
+                                     central_longitude = 265., 
+                                     standard_parallels = (10,10))
+        
+        fig = plt.figure(figsize=(20, 20))
+
+        ax = plt.axes(projection = proj)
+
+        ax.set_global()
+        ax.gridlines(draw_labels=True, linewidth=2, color='gray', alpha=0.5, linestyle='--')
+        ax.add_feature(cfeature.BORDERS, linestyle=':')
+        ax.add_feature(cfeature.STATES, linestyle=':')
+        
+        if newlat == None:
+            lat_min, lat_max = glat_min, glat_max
+        else:
+            lat_min, lat_max = newlat
+            
+        if newlon == None:
+            lon_min, lon_max = glon_min, glon_max
+        else:
+            lon_min, lon_max = newlon
+            
+        print(f'\nPlot Lat Min: %4.1f  Lat Max:  %4.1f' % (lat_min, lat_max))
+        print(f'\nPlot Lon Min: %4.1f  Lon Max:  %4.1f' % (lon_min, lon_max))
+
+        ax.set_extent([lon_min, lon_max, lat_min, lat_max])
+
+# # Add variety of features
+#         # ax.add_feature(cfeature.LAND)
+#         # ax.add_feature(cfeature.OCEAN)
+#         # ax.add_feature(cfeature.COASTLINE)
+
+# # Can also supply matplotlib kwargs
+#        ax.add_feature(cfeature.LAKES, alpha=0.5)    
+# if klevel < 10:
+#     vmin = -5.
+#     vmax = 10.
+#     clevels = np.linspace(vmin, vmax, 16)
+# else:
+#     vmin = -10.
+#     vmax = 20.
+#     clevels = np.linspace(vmin, vmax, 16)
+                
+    title = title_string(os.path.basename(file), klevel, 'W', cube[klevel].max(), cube[klevel].min())
+    
+    ax.pcolormesh(lons, lats, -cube[klevel], cmap=cmap, transform=ccrs.PlateCarree())
+                                    
+    ax.set_title(title,fontsize=20)
+    
+    return 
+
+#--------------------------------------------------------------------------------------------------
+# Interp from 3D pressure to 1D pressure (convert from hybrid to constant p-levels)
+
+def interp3d_np(data, p3d, p1d, nthreads = _nthreads):
+    
+    dinterp = np.zeros((len(p1d),data.shape[1],data.shape[2]),dtype=np.float32)
+
+    if nthreads < 0:  # turning this off for now.
+        def worker(i):
+            print("running %d %s" % (i, data.shape))
+            for j in np.arange(data.shape[1]):
+                  dinterp[:,j,i] = np.interp(p1d[::-1], p3d[:,j,i], data[:,j,i])
+
+        pool = mp.Pool(nthreads)
+        for i in np.arange(data.shape[2]):
+            pool.apply_async(worker, args = (i, ))
+        pool.close()
+        pool.join()
+        
+        return dinterp[::-1,:,:]
+    
+    else:        
+        for i in np.arange(data.shape[2]):
+            for j in np.arange(data.shape[1]):
+                dinterp[:,j,i] = np.interp(p1d[::-1], p3d[:,j,i], data[:,j,i])
+        
+        return dinterp[::-1,:,:]
+
+#--------------------------------------------------------------------------------------------------
+# Choose a section of the grid based on lat/lon corners - excludes the rest of grid from xarray
+
+def extract_subregion(xr_obj, sw_corner=None, ne_corner=None, drop=True):
+    
+    if (sw_corner and len(sw_corner) > 1) and (ne_corner and len(ne_corner) > 1):
+        lat_min = min(sw_corner[0], ne_corner[0])
+        lat_max = max(sw_corner[0], ne_corner[0])
+        lon_min = min(sw_corner[1], ne_corner[1])
+        lon_max = max(sw_corner[1], ne_corner[1])
+        
+        print(f'Creating a sub-region of grid: {lat_min:.2f}, {lon_min:.2f}, {lat_max:.2f}, {lon_max:5.2f}','\n')
+        
+        xr_obj.attrs['gridType'] = 'region'
+
+        return xr_obj.where( (lat_min < xr_obj.lats) & (xr_obj.lats < lat_max)
+                           & (lon_min < xr_obj.lons) & (xr_obj.lons < lon_max), drop=drop)
+    else:
+        print(f"No grid information supplied - returning original grid!\n")
+        return xr_obj
+
+#--------------------------------------------------------------------------------------------------
 
 def hrrr_grib_read_variable(file, sw_corner=None, ne_corner=None, var_list=[''], interpP=True, writeout=True, prefix=None):
     
@@ -160,13 +280,12 @@ def hrrr_grib_read_variable(file, sw_corner=None, ne_corner=None, var_list=[''],
     lats, lons = grbFile_attr(grb_file)
 
     pres = None
-    
 
     if interpP:  # need to extract out 3D pressure for interp.
         
         grb_var = grb_file.select(name='Pressure')
         cube = grbVar_to_cube(grb_var, type='hybrid')
-        p3d  = cube['data']
+        p3d = cube['data']
         print(f'InterpP is True, Read 3D pressure field from GRIB file\n')
         print(f'P-max:  %5.2f  P-min:  %5.2f\n' % (p3d.max(), p3d.min()))
 
@@ -198,10 +317,6 @@ def hrrr_grib_read_variable(file, sw_corner=None, ne_corner=None, var_list=[''],
                                                   coords={"lats": (["ny","nx"], lats),
                                                           "lons": (["ny","nx"], lons), 
                                                           "hybid": (["nz"],     cube['levels']) } )
-            date      = cube['date'] 
-            fcstStart = cube['fcstStart']
-            fcstHour  = cube['fcstTime']
-
         if variables[key][1] == 2:
 
             cube = grbVar_to_slice(grb_var, type=variables[key][2])
@@ -209,9 +324,6 @@ def hrrr_grib_read_variable(file, sw_corner=None, ne_corner=None, var_list=[''],
             new = xr.DataArray( cube['data'], dims=['ny','nx'], 
                                              coords={"lats": (["ny","nx"], lats),
                                                      "lons": (["ny","nx"], lons) } )  
-            date      = cube['date'] 
-            fcstStart = cube['fcstStart']
-            fcstHour  = cube['fcstTime']
 
         if n == 0:
 
@@ -222,6 +334,18 @@ def hrrr_grib_read_variable(file, sw_corner=None, ne_corner=None, var_list=[''],
             ds_conus[key] = new
 
         del(new)
+        
+        date      = cube['date'] 
+        fcstStart = cube['fcstStart']
+        fcstHour  = cube['fcstTime']
+        
+    # Add attributes
+    
+    ds_conus.attrs['date'] = date
+    ds_conus.attrs['fcstStart']  = fcstStart
+    ds_conus.attrs['fcstHour']   = fcstHour
+    ds_conus.attrs['gridPrefix'] = prefix
+    ds_conus.attrs['gridType']   = 'conus'
 
     # clean up grib file
     
@@ -240,11 +364,12 @@ def hrrr_grib_read_variable(file, sw_corner=None, ne_corner=None, var_list=[''],
     # extract region
     
     ds_conus = extract_subregion(ds_conus, sw_corner=sw_corner, ne_corner=ne_corner)
-
+    
 
     if writeout:
         dir, base = os.path.split(file)
-        outfilename = os.path.join(dir, '%s_%8.8i%2.2i_F%2.2i.nc' % (prefix, date,fcstStart,fcstHour))
+        outfilename = os.path.join(dir, '%s_%8.8i%2.2i_F%2.2i.nc' % (ds_conus.attrs['gridType'], date, fcstStart, fcstHour))
+        ds_conus.attrs['filename'] = os.path.basename(outfilename)
         ds_conus.to_netcdf(outfilename, mode='w')  
         print(f'Successfully wrote new data to file:: {outfilename}','\n')
         return ds_conus, outfilename     
@@ -335,26 +460,26 @@ def fv3_grib_read_variable(file, sw_corner=None, ne_corner=None, var_list=[''], 
     
     # extract region
     
-    if (sw_corner and len(sw_corner) > 1) and (ne_corner and len(ne_corner) > 1):
-        lat_min = min(sw_corner[0], ne_corner[0])
-        lat_max = max(sw_corner[0], ne_corner[0])
-        lon_min = min(sw_corner[1], ne_corner[1])
-        lon_max = max(sw_corner[1], ne_corner[1])
-        print(f'Creating a sub-region of conus grid: {lat_min:.2f}, {lon_min:.2f}, {lat_max:.2f}, {lon_max:5.2f}','\n')
+    ds_conus = extract_subregion(ds_conus, sw_corner=sw_corner, ne_corner=ne_corner)
+    
+    # Useful info for global attributes
+         
+    ds_conus.attrs['date'] = date
+    ds_conus.attrs['fcstStart'] = fcstStart
+    ds_conus.attrs['fcstHour'] = fcstHour
 
-        ds_conus = ds_conus.where( (lat_min < ds_conus.lats) & (ds_conus.lats < lat_max)
-                                 & (lon_min < ds_conus.lons) & (ds_conus.lons < lon_max), drop=True)            
     if writeout:
         
         dir, base = os.path.split(file)
         outfilename = os.path.join(dir, '%s_%8.8i%2.2i_F%2.2i.nc' % (prefix, date,fcstStart,fcstHour))
+        ds_conus.attrs['filename'] = outfilename
         ds_conus.to_netcdf(outfilename, mode='w')  
         print(f'Successfully wrote new data to file:: {outfilename}','\n')
+        return ds_conus
         
     else:
-        return ds_conus, outfilename
-
-
+        
+        return ds_conus
 
 #--------------------------------------------------------------------------------------------------
 

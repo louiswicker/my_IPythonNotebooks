@@ -1,7 +1,7 @@
 import numpy as np
 import sys as sys
 import time
-
+import scipy
 #---------------------------------------------------------------------------------------------
 
 class TimerError(Exception):
@@ -198,7 +198,7 @@ def RaymondFilter6(xy2d, eps, npass = 1, **kwargs):
         NM4 = N-4
         NM5 = N-5
         NM6 = N-6
-
+        
         # Compute inner RHS
         
         RHS[3:NM3] = EPS*((XY[0:NM3-3]+XY[6:NM3+3])
@@ -232,7 +232,14 @@ def RaymondFilter6(xy2d, eps, npass = 1, **kwargs):
             RHS[NM2] =  EPS*( XY[NM1] - 2.0*XY[NM2] +     XY[NM3] )   
             RHS[NM1] = 0.0 
 
-            XF[1:-1] = XF[1:-1] + spsolve(A, RHS[1:-1])
+            B = scipy.linalg.lu_factor(A.toarray())
+
+            XF[1:-1] = XF[1:-1] + scipy.linalg.lu_solve(B, RHS[1:-1])
+            
+            print('X')
+
+
+#            XF[1:-1] = XF[1:-1] + spsolve(A, RHS[1:-1])
 
             return XF
 
@@ -240,7 +247,11 @@ def RaymondFilter6(xy2d, eps, npass = 1, **kwargs):
     # Code to do 1D or 2D input
 
     if len(xy2d.shape) < 2:
+        
         A = Filter6_Init(xy2d.shape[0], eps, **kwargs)
+        
+        print(f'\nCOND:  \n',np.linalg.cond(A.toarray()))
+        
         x_copy = xy2d[:].copy()
         for n in np.arange(npass):
             x_copy = Filter1D(x_copy.copy(), eps, A, **kwargs)
@@ -584,8 +595,13 @@ def RaymondFilter10(xy2d, eps, **kwargs):
                    -120.0*(XY[3:NM5-2]+XY[ 7:NM5+2])
                    +210.0*(XY[4:NM5-1]+XY[ 6:NM5+1])
                    -252.0* XY[5:NM5]                )
+        
+        B = scipy.linalg.lu_factor(A.toarray())
 
-        XF[1:-1] = XF[1:-1] + spsolve(A, RHS[1:-1])
+        XF[1:-1] = XF[1:-1] + scipy.linalg.lu_solve(B, RHS[1:-1])
+
+#        XF[1:-1] = XF[1:-1] + spsolve(A, RHS[1:-1])
+
         
         return XF
 
@@ -594,6 +610,10 @@ def RaymondFilter10(xy2d, eps, **kwargs):
 
     if len(xy2d.shape) < 2:
         A = Filter10_Init(xy2d.shape[0], eps)
+        
+        print(f'\nCOND:  \n',np.linalg.cond(A.toarray()))
+
+
         return Filter1D(xy2d[:], eps, A, **kwargs)
     
     elif len(xy2d.shape) > 2:
